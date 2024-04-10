@@ -1,0 +1,19 @@
+name: phaser
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - aiohttp
+    - matplotlib
+    - pip-chill
+    - plotly
+    - pytorch-lightning
+    - soundfile
+    - torchaudio
+    - torchlpc
+    - torchvision
+    - wandb
+
+
