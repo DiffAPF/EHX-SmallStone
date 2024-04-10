@@ -31,10 +31,8 @@ class Phaser(pl.LightningModule):
         self.esr = utils.ESRLoss()
         if args.loss_fcn == "esr":
             self.loss_fcn = self.esr
-            print("Loss function: ESR")
         else:
             self.loss_fcn = self.mrsl
-            print("Loss function: MRSL")
         self.last_time = time.time()
         self.epoch = 0
         self.wandb = args.wandb

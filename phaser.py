@@ -1,6 +1,4 @@
 import math
-
-
 import torch
 from torch.nn import Parameter
 from torch import Tensor as T
