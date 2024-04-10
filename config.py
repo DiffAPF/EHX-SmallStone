@@ -1,0 +1,42 @@
+config = {
+    'ss-a': {'dataset_target': 'audio_data/small_stone/colour=0_rate=3oclock.wav',
+             'train_data_length': 5.0,
+             'window_length': 0.04,
+             'seed': 1,
+             'ckpt_fs': 'checkpoints/irklcehz/checkpoints/epoch=9399-val_loss_sample=0.0153.ckpt',
+             'ckpt_td': 'checkpoints/8clzfr3w/checkpoints/epoch=9949-val_loss_sample=0.0136.ckpt'},
+    'ss-b': {'dataset_target': 'audio_data/small_stone/colour=0_rate=12oclock.wav',
+             'train_data_length': 5.0,
+             'window_length': 0.16,
+             'seed': 1,
+             'ckpt_fs': 'checkpoints/q3wp0jp9/checkpoints/epoch=9749-val_loss_sample=0.0149.ckpt',
+             'ckpt_td': 'checkpoints/sfc0xnah/checkpoints/epoch=9149-val_loss_sample=0.0134.ckpt'},
+    'ss-c': {'dataset_target': 'audio_data/small_stone/colour=0_rate=9oclock.wav',
+             'train_data_length': 15.0,
+             'window_length': 0.64,
+             'seed': 8,
+             'ckpt_fs': 'checkpoints/382sqc3t/checkpoints/epoch=5499-val_loss_sample=0.0180.ckpt',
+             'ckpt_td': 'checkpoints/tqdqfw4d/checkpoints/epoch=7549-val_loss_sample=0.0223.ckpt'},
+    'ss-d': {'dataset_target': 'audio_data/small_stone/colour=1_rate=3oclock.wav',
+             'train_data_length': 5.0,
+             'window_length': 0.04,
+             'seed': 5,
+             'ckpt_fs': 'checkpoints/tvbqc5vk/checkpoints/epoch=1249-val_loss_sample=0.2347.ckpt',
+             'ckpt_td': 'checkpoints/c184kwd6/checkpoints/epoch=2599-val_loss_sample=0.2333.ckpt'},
+    'ss-e': {'dataset_target': 'audio_data/small_stone/colour=1_rate=12oclock.wav',
+             'train_data_length': 5.0,
+             'window_length': 0.16,
+             'seed': 1,
+             'ckpt_fs': 'checkpoints/xnn4t1zb/checkpoints/epoch=1799-val_loss_sample=0.1669.ckpt',
+             'ckpt_td': 'checkpoints/x9go1vgd/checkpoints/epoch=1699-val_loss_sample=0.1387.ckpt'},
+    'ss-f': {'dataset_target': 'audio_data/small_stone/colour=1_rate=9oclock.wav',
+             'train_data_length': 25.0,
+             'window_length': 0.64,
+             'seed': 7,
+             'ckpt_fs': 'checkpoints/tnxofl5w/checkpoints/epoch=2649-val_loss_sample=0.0983.ckpt',
+             'ckpt_td': 'checkpoints/lyixw8p2/checkpoints/epoch=9999-val_loss_sample=0.0879.ckpt'}
+}
+
+def get_config(name: str):
+    return config[name]
+
