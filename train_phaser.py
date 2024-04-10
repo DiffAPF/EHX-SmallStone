@@ -8,7 +8,6 @@ from pytorch_lightning.loggers import WandbLogger
 import time
 import torch
 from torch.utils.data import DataLoader
-import torchaudio
 import wandb
 import matplotlib.pyplot as plt
 import utils
@@ -29,10 +28,6 @@ class Phaser(pl.LightningModule):
 
         self.save_hyperparameters()
         self.esr = utils.ESRLoss()
-        if args.loss_fcn == "esr":
-            self.loss_fcn = self.esr
-        else:
-            self.loss_fcn = self.mrsl
         self.last_time = time.time()
         self.epoch = 0
         self.wandb = args.wandb
@@ -51,7 +46,7 @@ class Phaser(pl.LightningModule):
         # Training
         x, y = batch
         y_pred, _ = self(x)
-        loss = self.loss_fcn(y.squeeze(1), y_pred)
+        loss = self.esr(y.squeeze(1), y_pred)
 
         # optimize
         opt.zero_grad()
@@ -150,10 +145,9 @@ if __name__ == "__main__":
 
     # general
     parser.add_argument("--checkpoint_path", type=str, default="")
-    parser.add_argument("--project_name", type=str, default="ddsp-phaser-sample-based")
+    parser.add_argument("--project_name", type=str, default="")
     parser.add_argument("--run_name", type=str, default="")
-    parser.add_argument("--experiment_name", type=str, default="DAFx24_results_1")
-    parser.add_argument("--log_path", type=str, default="./out")
+    parser.add_argument("--experiment_name", type=str, default="")
     parser.add_argument("--wandb", action=argparse.BooleanOptionalAction)
     parser.add_argument("--max_epochs", type=int, default=10000)
     parser.add_argument("--check_val_every_n_epoch", type=int, default=50)
@@ -161,10 +155,8 @@ if __name__ == "__main__":
 
     # model
     parser.add_argument("--sample_based", action="store_true")
-    parser.add_argument("--freeze", type=int, default=0)
     parser.add_argument("--window_length", type=float, default=0.08)
     parser.add_argument("--overlap", type=float, default=0.75)
-    parser.add_argument("--loss_fcn", type=str, default="esr")
     parser.add_argument("--mlp_activation", type=str, default="tanh")
     parser.add_argument("--mlp_width", type=int, default=8)
     parser.add_argument("--mlp_layers", type=int, default=3)
@@ -246,12 +238,6 @@ if __name__ == "__main__":
 
     model.double()
 
-    # freezes osc parameters
-    if args.freeze != 0:
-        model.model.set_frequency(args.f0)
-        model.model.damped = False
-        model.model.lfo.osc.z.requires_grad = False
-        model.model.lfo.osc.z0.requires_grad = False
 
     # optional wandb logger
     if args.wandb is not None:
