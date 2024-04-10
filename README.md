@@ -21,30 +21,28 @@
 
 1) Clone this repo and open its directory.
 
-2) Install requirements using:
-
-    `conda env create -f conda_env_cpu.yml` 
-3) Activate environment:
-
-    `conda activate phaser`
+2) Install requirements: `conda env create -f conda_env_cpu.yml` 
+3) Activate environment: `conda activate phaser`
 
 ### Train models
 The recommended training configurations for six snapshots of the EHX Small-Stone pedal considered in the paper can be found in `config.py`.
 
-Train a model with one of these configs using the proposed time-domain filter implementation:\
-`python3 train_phaser.py --config ss-a --sample_based`
-    
-or with the baseline frequency sampleing approach:\
-`python3 train_phaser.py --config ss-a `
-
+Train a model with one of these configs using the proposed time-domain filter implementation:
+```
+python3 train_phaser.py --config ss-a --sample_based
+```
+or with the baseline frequency sampling approach:
+```
+python3 train_phaser.py --config ss-a
+```
 
 
 ### Inference
-Run inference on all pretrained models provided in the `checkpoints` dir:
+Run inference on all pretrained models provided in `checkpoints/` and save output audio files to  `audio_data/`:
 ```angular2html
 python3 inference.py
 ```
-This saves six audio files to  `audio_data/`. 
+
 
 
 Note that by default LFO will be out of phase with the equivalent target files in `audio_data/small_stone`. 
