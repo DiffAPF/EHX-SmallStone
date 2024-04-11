@@ -7,16 +7,17 @@ from torchaudio.functional import lfilter
 import utils as utils
 from torchlpc import sample_wise_lpc
 
+
 class Phaser(torch.nn.Module):
     def __init__(
-        self,
-        sample_rate,
-        window_length=50e-3,
-        overlap_factor=0.75,
-        mlp_width=16,
-        mlp_layers=3,
-        mlp_activation="tanh",
-        f_range=None,
+            self,
+            sample_rate,
+            window_length=50e-3,
+            overlap_factor=0.75,
+            mlp_width=16,
+            mlp_layers=3,
+            mlp_activation="tanh",
+            f_range=None,
     ):
         super().__init__()
 
@@ -63,6 +64,19 @@ class Phaser(torch.nn.Module):
         self.max_d = 0.0
         self.min_d = 0.0
 
+        #################
+        # for TorchScript
+        #################
+        self.is_scriptable = False
+        self.lpc_func = sample_wise_lpc
+
+    def toggle_scriptable(self, is_scriptable: bool) -> None:
+        self.is_scriptable = is_scriptable
+        if is_scriptable:
+            self.lpc_func = utils.sample_wise_lpc_scriptable
+        else:
+            self.lpc_func = sample_wise_lpc
+
     def __init_OLA__(self, window_length, overlap_factor):
         self.overlap = overlap_factor
         hops_per_frame = int(1 / (1 - self.overlap))
@@ -75,10 +89,12 @@ class Phaser(torch.nn.Module):
             "window_idx", torch.arange(0, self.window_size, 1).detach()
         )
         self.register_buffer("hann", torch.hann_window(self.window_size).detach())
-        self.register_buffer("z", utils.z_inverse(self.Nfft, full=False).view(-1, 1).detach())
+        self.register_buffer(
+            "z", utils.z_inverse(self.Nfft, full=False).view(-1, 1).detach()
+        )
         self.OLA_gain = (3 / 8) * (self.window_size / self.hop_size)
 
-    def forward(self, x, sample_based=True):
+    def forward(self, x: T, sample_based: bool = True):
         device = x.device
         x = x.squeeze()
         sequence_length = x.shape[0]
@@ -102,7 +118,6 @@ class Phaser(torch.nn.Module):
         else:
             return self.forward_frame_based(x, p), p
 
-
     #########################
     # frequency sampling
     ########################
@@ -114,13 +129,24 @@ class Phaser(torch.nn.Module):
 
         X = torch.stft(
             x,
-            n_fft=self.Nfft, hop_length=self.hop_size, win_length=self.window_size,
-            return_complex=True, onesided=True, center=True, pad_mode="constant", window=self.hann)
+            n_fft=self.Nfft,
+            hop_length=self.hop_size,
+            win_length=self.window_size,
+            return_complex=True,
+            onesided=True,
+            center=True,
+            pad_mode="constant",
+            window=self.hann,
+        )
         Y = X * h
         y = torch.istft(
             Y,
-            n_fft=self.Nfft, win_length=self.window_size, hop_length=self.hop_size,
-            window=self.hann, center=True, length=x.shape[-1],
+            n_fft=self.Nfft,
+            win_length=self.window_size,
+            hop_length=self.hop_size,
+            window=self.hann,
+            center=True,
+            length=x.shape[-1],
         )
 
         return y
@@ -153,34 +179,27 @@ class Phaser(torch.nn.Module):
 
         # upsample if necessary
         if sequence_length != p.shape[-1]:
-            combine_b = (
-                F.interpolate(
-                    combine_b.permute(0, 2, 1),
-                    size=sequence_length,
-                    mode="linear",
-                    align_corners=True,
-                ).permute(0, 2, 1)
-            )
-            combine_denom = (
-                F.interpolate(
-                    combine_denom.permute(0, 2, 1),
-                    size=sequence_length,
-                    mode="linear",
-                    align_corners=True,
-                ).permute(0, 2, 1)
-            )
+            combine_b = F.interpolate(
+                combine_b.permute(0, 2, 1),
+                size=sequence_length,
+                mode="linear",
+                align_corners=True,
+            ).permute(0, 2, 1)
+            combine_denom = F.interpolate(
+                combine_denom.permute(0, 2, 1),
+                size=sequence_length,
+                mode="linear",
+                align_corners=True,
+            ).permute(0, 2, 1)
 
         h1h2a = utils.time_varying_fir(h1, combine_b)
 
-        h1h2a = sample_wise_lpc(
-            h1h2a, combine_denom[..., 1:]
-        ).squeeze()
+        h1h2a = self.lpc_func(h1h2a, combine_denom[..., 1:]).squeeze()
         return h1g + h1h2a
-
 
     def get_params(self):
         return {
-            "lfo_f0": (self.sample_rate / self.hop_size) * self.lfo.omega / 2 / torch.pi ,
+            "lfo_f0": (self.sample_rate / self.hop_size) * self.lfo.omega / 2 / torch.pi,
             "lfo_r": self.lfo.get_r(),
             "lfo_phase": self.lfo.phi,
             "dry_mix": self.g1.detach(),
@@ -189,5 +208,3 @@ class Phaser(torch.nn.Module):
 
     def set_frequency(self, f0):
         self.lfo.set_frequency(f0, self.sample_rate / self.hop_size)
-
-

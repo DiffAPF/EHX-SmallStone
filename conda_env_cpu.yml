@@ -7,6 +7,7 @@ dependencies:
   - pip:
     - aiohttp
     - matplotlib
+    - neutone_sdk @ git+https://github.com/Neutone/neutone_sdk.git@c69108d6ad11910afdc3ce4ead0a647456e2addb
     - pip-chill
     - plotly
     - pytorch-lightning
@@ -15,5 +16,3 @@ dependencies:
     - torchlpc
     - torchvision
     - wandb
-
-

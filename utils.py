@@ -1,15 +1,21 @@
+from typing import Optional
+
 import torch
 from torch import Tensor as T
 from torch.nn import Parameter
 import torch.nn.functional as F
 
-def time_varying_fir(x: T, b: T) -> T:
+
+def time_varying_fir(x: T, b: T, zi: Optional[T] = None) -> T:
     assert x.ndim == 2
     assert b.ndim == 3
     assert x.size(0) == b.size(0)
     assert x.size(1) == b.size(1)
     order = b.size(2) - 1
     x_padded = F.pad(x, (order, 0))
+    if zi is not None:
+        assert zi.shape == (x.size(0), order)
+        x_padded[:, :order] = zi
     x_unfolded = x_padded.unfold(dimension=1, size=order + 1, step=1)
     x_unfolded = x_unfolded.unsqueeze(3)
     b = b.flip(2).unsqueeze(2)
@@ -17,6 +23,33 @@ def time_varying_fir(x: T, b: T) -> T:
     y = y.squeeze(3)
     y = y.squeeze(2)
     return y
+
+
+def sample_wise_lpc_scriptable(x: T, a: T, zi: Optional[T] = None) -> T:
+    assert x.ndim == 2
+    assert a.ndim == 3
+    assert x.size(0) == a.size(0)
+    assert x.size(1) == a.size(1)
+
+    B, T, order = a.shape
+    if zi is None:
+        zi = a.new_zeros(B, order)
+    else:
+        assert zi.shape == (B, order)
+
+    padded_y = torch.empty((B, T + order), dtype=x.dtype)
+    zi = torch.flip(zi, dims=[1])
+    padded_y[:, :order] = zi
+    padded_y[:, order:] = x
+    a_flip = torch.flip(a, dims=[2])
+
+    for t in range(T):
+        padded_y[:, t + order] -= (
+            a_flip[:, t : t + 1] @ padded_y[:, t : t + order, None]
+        )[:, 0, 0]
+
+    return padded_y[:, order:]
+
 
 def fourth_order_ap_coeffs(p):
     b = torch.stack(
@@ -112,7 +145,7 @@ class DampedOscillator(torch.nn.Module):
         self.amp = Parameter(torch.Tensor([self.default_amplitude]))
 
 
-    def forward(self, n, damped, normalise=False):
+    def forward(self, n: int, damped: bool, normalise: bool=False):
 
         z = torch.polar(self.get_r(), self.omega)
         z0 = torch.polar(self.amp, self.phi)
