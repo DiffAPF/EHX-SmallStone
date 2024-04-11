@@ -10,14 +10,14 @@ from torchlpc import sample_wise_lpc
 
 class Phaser(torch.nn.Module):
     def __init__(
-            self,
-            sample_rate,
-            window_length=50e-3,
-            overlap_factor=0.75,
-            mlp_width=16,
-            mlp_layers=3,
-            mlp_activation="tanh",
-            f_range=None,
+        self,
+        sample_rate,
+        window_length=50e-3,
+        overlap_factor=0.75,
+        mlp_width=16,
+        mlp_layers=3,
+        mlp_activation="tanh",
+        f_range=None,
     ):
         super().__init__()
 
@@ -168,13 +168,13 @@ class Phaser(torch.nn.Module):
         b1 = torch.cat([self.bq.DC, self.bq.ff_params])
         a1 = utils.logits2coeff(self.bq.fb_params)
         b1 = b1.view(1, 1, -1).expand(x.size(0), x.size(1), -1)
-        a1 = a1[1:]
+        # a1 = a1[1:]
         a1 = a1.view(1, 1, -1).expand(x.size(0), x.size(1), -1)
         # h1 = lfilter(x, a1.squeeze(), b1.squeeze(), clamp=False
-        h1 = self.lpc_func(x, a1)
-        h1 = utils.time_varying_fir(h1, b1)
+        # h1 = self.lpc_func(x, a1)
+        # h1 = utils.time_varying_fir(h1, b1)
 
-        h1g = self.g1 * h1
+        # h1g = self.g1 * h1
 
         combine_a, combine_b = utils.fourth_order_ap_coeffs(p)
 
@@ -197,14 +197,23 @@ class Phaser(torch.nn.Module):
                 align_corners=True,
             ).permute(0, 2, 1)
 
-        h1h2a = utils.time_varying_fir(h1, combine_b)
+        full_denom = utils.combine_coeffs(a1, combine_denom)
+        full_b = utils.combine_coeffs(b1, self.g1 * combine_denom + combine_b)
 
-        h1h2a = self.lpc_func(h1h2a, combine_denom[..., 1:]).squeeze()
-        return h1g + h1h2a
+        # h1h2a = utils.time_varying_fir(h1, combine_b)
+        h = utils.time_varying_fir(x, full_b)
+
+        # h1h2a = self.lpc_func(h1h2a, combine_denom[..., 1:]).squeeze()
+        # return h1g + h1h2a
+        h = self.lpc_func(h, full_denom[..., 1:]).squeeze()
+        return h
 
     def get_params(self):
         return {
-            "lfo_f0": (self.sample_rate / self.hop_size) * self.lfo.omega / 2 / torch.pi,
+            "lfo_f0": (self.sample_rate / self.hop_size)
+            * self.lfo.omega
+            / 2
+            / torch.pi,
             "lfo_r": self.lfo.get_r(),
             "lfo_phase": self.lfo.phi,
             "dry_mix": self.g1.detach(),
