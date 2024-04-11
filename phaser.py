@@ -1,4 +1,5 @@
 import math
+from typing import Optional, Tuple
 
 import torch
 from torch import Tensor as T
@@ -114,7 +115,8 @@ class Phaser(torch.nn.Module):
         p = torch.tanh((1.0 - torch.tan(d)) / (1.0 + torch.tan(d)))
 
         if sample_based:
-            return self.forward_sample_based(x, p), p
+            y, _ = self.forward_sample_based(x, p)
+            return y, p
         else:
             return self.forward_frame_based(x, p), p
 
@@ -155,7 +157,7 @@ class Phaser(torch.nn.Module):
     # time domain
     # input dims (T) or (C, T)
     ########################
-    def forward_sample_based(self, x, p):
+    def forward_sample_based(self, x: T, p: T, zi: Optional[T] = None) -> Tuple[T, T]:
         if x.ndim == 1:
             x = x.unsqueeze(0)
         if p.ndim == 1:
@@ -185,9 +187,16 @@ class Phaser(torch.nn.Module):
         full_denom = utils.combine_coeffs(a1, combine_denom)
         full_b = utils.combine_coeffs(b1, self.g1 * combine_denom + combine_b)
 
-        y_a = self.lpc_func(x, full_denom[..., 1:])
-        y_ab = utils.time_varying_fir(y_a, full_b)
-        return y_ab
+        order = full_b.size(-1) - 1
+        zi_a = zi
+        if zi_a is not None:
+            zi_a = torch.flip(zi_a, [-1])  # Convert to SciPy conventional ordering
+
+        y_a = self.lpc_func(x, full_denom[..., 1:], zi_a)
+        next_zi = y_a[..., -order:]
+
+        y_ab = utils.time_varying_fir(y_a, full_b, zi)
+        return y_ab, next_zi
 
     def get_params(self):
         return {

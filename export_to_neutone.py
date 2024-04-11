@@ -23,6 +23,7 @@ class PhaserModel(nn.Module):
             sr: int = 44100,
             min_lfo_rate_hz: float = 0.1,
             max_lfo_rate_hz: float = 5.0,
+            order: int = 6,
     ) -> None:
         super().__init__()
         self.model_key = model_key
@@ -32,9 +33,11 @@ class PhaserModel(nn.Module):
         self.model = get_pretrained_model(model_key=model_key)
         self.model.toggle_scriptable(True)
         self.register_buffer("prev_phase", tr.tensor(0.0, dtype=tr.double))
+        self.register_buffer("zi", tr.zeros((2, order), dtype=tr.double))
 
     def reset(self) -> None:
         self.prev_phase.zero_()
+        self.zi.zero_()
 
     def make_argument(self, n_samples: int, freq: float, phase: float) -> T:
         argument = (
@@ -72,8 +75,8 @@ class PhaserModel(nn.Module):
         )
         p = tr.tanh((1.0 - tr.tan(d)) / (1.0 + tr.tan(d)))
 
-        # x = x.repeat(2, 1)
-        x = self.model.forward_sample_based(x, p)
+        x, next_zi = self.model.forward_sample_based(x, p, self.zi)
+        self.zi[:, :] = next_zi[:, :]
         return x
 
 
