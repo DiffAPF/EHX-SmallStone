@@ -20,9 +20,9 @@ def time_varying_fir(x: T, b: T) -> T:
 
 def fourth_order_ap_coeffs(p):
     b = torch.stack(
-        [p**4, -4*p**3, 6*p**2, -4*p, torch.ones_like(p)], dim=1
+        [p**4, -4*p**3, 6*p**2, -4*p, torch.ones_like(p)], dim=p.ndim
     )
-    a = b.flip(1)
+    a = b.flip(-1)
     return a, b
 
 def logits2coeff(logits: T) -> T:

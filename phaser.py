@@ -127,9 +127,16 @@ class Phaser(torch.nn.Module):
 
     #########################
     # time domain
+    # input dims (T) or (C, T)
     ########################
     def forward_sample_based(self, x, p):
-        sequence_length = x.shape[0]
+
+        if x.ndim == 1:
+            x = x.unsqueeze(0)
+        if p.ndim == 1:
+            p = p.unsqueeze(0)
+
+        sequence_length = x.shape[-1]
 
         # bq filter
         b1 = torch.cat([self.bq.DC, self.bq.ff_params])
@@ -138,42 +145,37 @@ class Phaser(torch.nn.Module):
 
         h1g = self.g1 * h1
 
-        allpass_a, allpass_b = utils.fourth_order_ap_coeffs(p)
-        combine_b = allpass_b
-        combine_a = allpass_a
+        combine_a, combine_b = utils.fourth_order_ap_coeffs(p)
 
         combine_denom = combine_a - self.g2.abs() * combine_b
         combine_b = combine_b / combine_denom[..., :1]
         combine_denom = combine_denom / combine_denom[..., :1]
 
-        # upsample
-        combine_b = (
-            F.interpolate(
-                combine_b.T.unsqueeze(0),
-                size=sequence_length,
-                mode="linear",
-                align_corners=True,
+        # upsample if necessary
+        if sequence_length != p.shape[-1]:
+            combine_b = (
+                F.interpolate(
+                    combine_b.permute(0, 2, 1),
+                    size=sequence_length,
+                    mode="linear",
+                    align_corners=True,
+                ).permute(0, 2, 1)
             )
-            .squeeze(0)
-            .T[:sequence_length]
-        )
-        combine_denom = (
-            F.interpolate(
-                combine_denom.T.unsqueeze(0),
-                size=sequence_length,
-                mode="linear",
-                align_corners=True,
+            combine_denom = (
+                F.interpolate(
+                    combine_denom.permute(0, 2, 1),
+                    size=sequence_length,
+                    mode="linear",
+                    align_corners=True,
+                ).permute(0, 2, 1)
             )
-            .squeeze(0)
-            .T[:sequence_length]
-        )
 
-        h1h2a = utils.time_varying_fir(h1.unsqueeze(0), combine_b.unsqueeze(0))
+        h1h2a = utils.time_varying_fir(h1, combine_b)
 
         h1h2a = sample_wise_lpc(
-            h1h2a, combine_denom[..., 1:].unsqueeze(0)
+            h1h2a, combine_denom[..., 1:]
         ).squeeze()
-        return (h1g + h1h2a).unsqueeze(0)
+        return h1g + h1h2a
 
 
     def get_params(self):
