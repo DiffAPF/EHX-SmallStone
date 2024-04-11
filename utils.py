@@ -189,3 +189,36 @@ class ESRLoss(torch.nn.Module):
         mse = torch.mean(torch.square(torch.subtract(target, predicted)))
         signal_energy = torch.mean(torch.square(target))
         return torch.div(mse, signal_energy + self.epsilon)
+
+
+def linear_interpolate_dim(
+    x: T, n: int, dim: int = -1, align_corners: bool = True
+) -> T:
+    n_dim = x.ndim
+    assert 0 < n_dim <= 3
+    if dim < 0:
+        dim = n_dim + dim
+    assert 0 <= dim < n_dim
+    if x.size(dim) == n:
+        return x
+
+    swapped_dims = False
+    if n_dim == 1:
+        x = x.view(1, 1, -1)
+    elif n_dim == 2:
+        assert dim != 0  # TODO(cm)
+        x = x.unsqueeze(1)
+    elif x.ndim == 3:
+        assert dim != 0  # TODO(cm)
+        if dim == 1:
+            x = x.swapaxes(1, 2)
+            swapped_dims = True
+
+    x = F.interpolate(x, n, mode="linear", align_corners=align_corners)
+    if n_dim == 1:
+        x = x.view(-1)
+    elif n_dim == 2:
+        x = x.squeeze(1)
+    elif swapped_dims:
+        x = x.swapaxes(1, 2)
+    return x

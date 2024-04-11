@@ -1,11 +1,11 @@
 import math
+
 import torch
-from torch.nn import Parameter
 from torch import Tensor as T
-import torch.nn.functional as F
-from torchaudio.functional import lfilter
-import utils as utils
+from torch.nn import Parameter
 from torchlpc import sample_wise_lpc
+
+import utils as utils
 
 
 class Phaser(torch.nn.Module):
@@ -156,7 +156,6 @@ class Phaser(torch.nn.Module):
     # input dims (T) or (C, T)
     ########################
     def forward_sample_based(self, x, p):
-
         if x.ndim == 1:
             x = x.unsqueeze(0)
         if p.ndim == 1:
@@ -167,14 +166,6 @@ class Phaser(torch.nn.Module):
         # bq filter
         b1 = torch.cat([self.bq.DC, self.bq.ff_params])
         a1 = utils.logits2coeff(self.bq.fb_params)
-        b1 = b1.view(1, 1, -1).expand(x.size(0), x.size(1), -1)
-        # a1 = a1[1:]
-        a1 = a1.view(1, 1, -1).expand(x.size(0), x.size(1), -1)
-        # h1 = lfilter(x, a1.squeeze(), b1.squeeze(), clamp=False
-        # h1 = self.lpc_func(x, a1)
-        # h1 = utils.time_varying_fir(h1, b1)
-
-        # h1g = self.g1 * h1
 
         combine_a, combine_b = utils.fourth_order_ap_coeffs(p)
 
@@ -184,29 +175,19 @@ class Phaser(torch.nn.Module):
 
         # upsample if necessary
         if sequence_length != p.shape[-1]:
-            combine_b = F.interpolate(
-                combine_b.permute(0, 2, 1),
-                size=sequence_length,
-                mode="linear",
-                align_corners=True,
-            ).permute(0, 2, 1)
-            combine_denom = F.interpolate(
-                combine_denom.permute(0, 2, 1),
-                size=sequence_length,
-                mode="linear",
-                align_corners=True,
-            ).permute(0, 2, 1)
+            combine_b = utils.linear_interpolate_dim(
+                combine_b, n=sequence_length, dim=1, align_corners=True
+            )
+            combine_denom = utils.linear_interpolate_dim(
+                combine_denom, n=sequence_length, dim=1, align_corners=True
+            )
 
         full_denom = utils.combine_coeffs(a1, combine_denom)
         full_b = utils.combine_coeffs(b1, self.g1 * combine_denom + combine_b)
 
-        # h1h2a = utils.time_varying_fir(h1, combine_b)
-        h = utils.time_varying_fir(x, full_b)
-
-        # h1h2a = self.lpc_func(h1h2a, combine_denom[..., 1:]).squeeze()
-        # return h1g + h1h2a
-        h = self.lpc_func(h, full_denom[..., 1:]).squeeze()
-        return h
+        y_a = self.lpc_func(x, full_denom[..., 1:])
+        y_ab = utils.time_varying_fir(y_a, full_b)
+        return y_ab
 
     def get_params(self):
         return {
