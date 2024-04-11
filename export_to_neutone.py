@@ -17,23 +17,29 @@ from get_pretrained_model import get_pretrained_model
 
 
 class PhaserModel(nn.Module):
+    ORDER: int = 6
+
     def __init__(
-            self,
-            model_key: str,
-            sr: int = 44100,
-            min_lfo_rate_hz: float = 0.1,
-            max_lfo_rate_hz: float = 5.0,
-            order: int = 6,
+        self,
+        model_key: str,
+        sr: int = 44100,
+        min_lfo_rate_hz: float = 0.1,
+        max_lfo_rate_hz: float = 5.0,
+        use_fs: bool = False,
     ) -> None:
         super().__init__()
         self.model_key = model_key
         self.sr = sr
         self.min_lfo_rate_hz = min_lfo_rate_hz
         self.max_lfo_rate_hz = max_lfo_rate_hz
+        self.use_fs = use_fs
+
         self.model = get_pretrained_model(model_key=model_key)
         self.model.toggle_scriptable(True)
+        self.win_len = self.model.window_size
+        self.hop_len = self.model.hop_size
         self.register_buffer("prev_phase", tr.tensor(0.0, dtype=tr.double))
-        self.register_buffer("zi", tr.zeros((2, order), dtype=tr.double))
+        self.register_buffer("zi", tr.zeros((2, self.ORDER), dtype=tr.double))
 
     def reset(self) -> None:
         self.prev_phase.zero_()
@@ -41,21 +47,21 @@ class PhaserModel(nn.Module):
 
     def make_argument(self, n_samples: int, freq: float, phase: float) -> T:
         argument = (
-                tr.cumsum(
-                    2 * tr.pi * tr.full((n_samples,), freq, dtype=tr.double) / self.sr,
-                    dim=0,
-                )
-                + phase
+            tr.cumsum(
+                2 * tr.pi * tr.full((n_samples,), freq, dtype=tr.double) / self.sr,
+                dim=0,
+            )
+            + phase
         )
         return argument
 
     def forward(
-            self, x: Tensor, lfo_rate_0to1: Tensor, lfo_stereo_phase_offset_0to1: Tensor
+        self, x: Tensor, lfo_rate_0to1: Tensor, lfo_stereo_phase_offset_0to1: Tensor
     ) -> Tensor:
         assert x.ndim == 2
         lfo_rate = (
-                lfo_rate_0to1 * (self.max_lfo_rate_hz - self.min_lfo_rate_hz)
-                + self.min_lfo_rate_hz
+            lfo_rate_0to1 * (self.max_lfo_rate_hz - self.min_lfo_rate_hz)
+            + self.min_lfo_rate_hz
         )
         lfo_stereo_phase_offset = lfo_stereo_phase_offset_0to1 * 2 * tr.pi
 
@@ -71,18 +77,23 @@ class PhaserModel(nn.Module):
         lfo = lfo.unsqueeze(2)
 
         d = self.model.bias + self.model.depth * 0.5 * (
-                1.0 + self.model.mlp(lfo).squeeze()
+            1.0 + self.model.mlp(lfo).squeeze()
         )
         p = tr.tanh((1.0 - tr.tan(d)) / (1.0 + tr.tan(d)))
-
-        x, next_zi = self.model.forward_sample_based(x, p, self.zi)
-        self.zi[:, :] = next_zi[:, :]
+        if self.use_fs:
+            x = self.model.forward_frame_based(x, p)
+        else:
+            x, next_zi = self.model.forward_sample_based(x, p, self.zi)
+            self.zi[:, :] = next_zi[:, :]
         return x
 
 
 class PhaserModelWrapper(WaveformToWaveformBase):
     def get_model_name(self) -> str:
-        return f"phaser_model_{self.model.model_key}"
+        if self.model.use_fs:
+            return f"phaser_model_{self.model.model_key}_fs_{self.model.win_len}"
+        else:
+            return f"phaser_model_{self.model.model_key}_td"
 
     def get_model_authors(self) -> List[str]:
         return ["Alistair Carson"]
@@ -139,7 +150,17 @@ class PhaserModelWrapper(WaveformToWaveformBase):
 
     @tr.jit.export
     def get_native_buffer_sizes(self) -> List[int]:
-        return []  # Supports all buffer sizes
+        if self.model.use_fs:
+            return [
+                bs
+                for bs in range(
+                    self.model.win_len,
+                    max(self.model.win_len + 1, 10000),
+                    self.model.hop_len,
+                )
+            ]
+        else:
+            return []  # Supports all buffer sizes
 
     @tr.jit.export
     def reset_model(self) -> bool:
@@ -155,11 +176,15 @@ class PhaserModelWrapper(WaveformToWaveformBase):
 
 
 if __name__ == "__main__":
+    model_key = "ss-a"
+    # model_key = "ss-b"
+    # model_key = "ss-c"
+    # model_key = "ss-d"
+    # model_key = "ss-e"
+    # model_key = "ss-f"
     model = PhaserModel(model_key="ss-a")
     wrapper = PhaserModelWrapper(model=model)
-    root_dir = pathlib.Path(
-        os.path.join("neutone_models", wrapper.get_model_name())
-    )
+    root_dir = pathlib.Path(os.path.join("neutone_models", wrapper.get_model_name()))
     save_neutone_model(
         wrapper,
         root_dir,

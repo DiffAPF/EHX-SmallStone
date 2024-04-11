@@ -123,12 +123,7 @@ class Phaser(torch.nn.Module):
     #########################
     # frequency sampling
     ########################
-    def forward_frame_based(self, x, p):
-
-        # Filter kernel
-        h_ap = torch.pow(((p - self.z) / (1 - p * self.z)), 4)
-        h = self.bq().view(-1, 1) * (self.g1 + h_ap / (1 - torch.abs(self.g2) * h_ap))
-
+    def forward_frame_based(self, x: T, p: T) -> T:
         X = torch.stft(
             x,
             n_fft=self.Nfft,
@@ -140,6 +135,15 @@ class Phaser(torch.nn.Module):
             pad_mode="constant",
             window=self.hann,
         )
+        n_frames = X.size(2)
+
+        p = utils.linear_interpolate_dim(p, n=n_frames, dim=1, align_corners=True)
+        p = p.unsqueeze(1)
+        z = self.z.unsqueeze(0).expand(2, -1, -1)  # Match stereo batch size
+        # Filter kernel
+        h_ap = torch.pow(((p - z) / (1 - p * z)), 4)
+        h = self.bq().view(-1, 1) * (self.g1 + h_ap / (1 - torch.abs(self.g2) * h_ap))
+
         Y = X * h
         y = torch.istft(
             Y,
