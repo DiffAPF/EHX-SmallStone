@@ -1,0 +1,65 @@
+{
+    "model_name": "phaser_model_ss-a_td",
+    "model_authors": [
+        "Alistair Carson"
+    ],
+    "model_version": "1.0.0",
+    "model_short_description": "DDSP phaser implementation.",
+    "model_long_description": "DDSP phaser implementation for 'Differentiable All-pole Filters for Time-varying Audio Systems'.",
+    "technical_description": "Wrapper for a DDSP phaser implementation that models an Electro-Harmonix Small Stone phaser pedal.",
+    "technical_links": {
+        "Code": "https://github.com/DiffAPF/EHX-SmallStone"
+    },
+    "tags": [
+        "phaser",
+        "ddsp",
+        "EHX Small Stone"
+    ],
+    "citation": "",
+    "is_experimental": true,
+    "neutone_parameters": {
+        "p1": {
+            "name": "lfo_rate",
+            "description": "LFO rate f[0.1 Hz to 5.0 Hz]",
+            "default_value": "0.5",
+            "used": "True",
+            "type": "continuous"
+        },
+        "p2": {
+            "name": "lfo_stereo_offset",
+            "description": "LFO stereo offset [0 to 2pi]",
+            "default_value": "0.0",
+            "used": "True",
+            "type": "continuous"
+        },
+        "p3": {
+            "name": "",
+            "description": "",
+            "default_value": "0.0",
+            "used": "False",
+            "type": "continuous"
+        },
+        "p4": {
+            "name": "",
+            "description": "",
+            "default_value": "0.0",
+            "used": "False",
+            "type": "continuous"
+        }
+    },
+    "wet_default_value": 1.0,
+    "dry_default_value": 0.0,
+    "input_gain_default_value": 0.5,
+    "output_gain_default_value": 0.5,
+    "is_input_mono": false,
+    "is_output_mono": false,
+    "model_type": "stereo-stereo",
+    "native_sample_rates": [
+        44100
+    ],
+    "native_buffer_sizes": [],
+    "look_behind_samples": 0,
+    "sdk_version": "1.4.3",
+    "pytorch_version": "2.1.2",
+    "date_created": 1712854005.410926
+}

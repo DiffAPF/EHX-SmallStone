@@ -182,7 +182,7 @@ if __name__ == "__main__":
     # model_key = "ss-d"
     # model_key = "ss-e"
     # model_key = "ss-f"
-    model = PhaserModel(model_key="ss-a")
+    model = PhaserModel(model_key=model_key)
     wrapper = PhaserModelWrapper(model=model)
     root_dir = pathlib.Path(os.path.join("neutone_models", wrapper.get_model_name()))
     save_neutone_model(
