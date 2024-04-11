@@ -23,8 +23,8 @@ class PhaserModel(nn.Module):
         self,
         model_key: str,
         sr: int = 44100,
-        min_lfo_rate_hz: float = 0.1,
-        max_lfo_rate_hz: float = 5.0,
+        min_lfo_rate_hz: float = 0.05,
+        max_lfo_rate_hz: float = 3.0,
         use_fs: bool = False,
     ) -> None:
         super().__init__()
@@ -127,7 +127,7 @@ class PhaserModelWrapper(WaveformToWaveformBase):
             ContinuousNeutoneParameter(
                 "lfo_rate",
                 f"LFO rate f[{self.model.min_lfo_rate_hz} Hz to {self.model.max_lfo_rate_hz} Hz]",
-                default_value=0.5,
+                default_value=0.0,
             ),
             ContinuousNeutoneParameter(
                 "lfo_stereo_offset",
@@ -176,12 +176,12 @@ class PhaserModelWrapper(WaveformToWaveformBase):
 
 
 if __name__ == "__main__":
-    model_key = "ss-a"
+    # model_key = "ss-a"
     # model_key = "ss-b"
     # model_key = "ss-c"
     # model_key = "ss-d"
     # model_key = "ss-e"
-    # model_key = "ss-f"
+    model_key = "ss-f"
     model = PhaserModel(model_key=model_key)
     wrapper = PhaserModelWrapper(model=model)
     root_dir = pathlib.Path(os.path.join("neutone_models", wrapper.get_model_name()))

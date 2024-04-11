@@ -20,8 +20,8 @@
     "neutone_parameters": {
         "p1": {
             "name": "lfo_rate",
-            "description": "LFO rate f[0.1 Hz to 5.0 Hz]",
-            "default_value": "0.5",
+            "description": "LFO rate f[0.05 Hz to 3.0 Hz]",
+            "default_value": "0.0",
             "used": "True",
             "type": "continuous"
         },
@@ -61,5 +61,5 @@
     "look_behind_samples": 0,
     "sdk_version": "1.4.3",
     "pytorch_version": "2.1.2",
-    "date_created": 1712854026.3054411
+    "date_created": 1712856315.5069592
 }
