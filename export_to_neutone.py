@@ -50,7 +50,6 @@ class PhaserModel(nn.Module):
             self, x: Tensor, lfo_rate_0to1: Tensor, lfo_stereo_phase_offset_0to1: Tensor
     ) -> Tensor:
         assert x.ndim == 2
-        n_ch = x.size(0)
         lfo_rate = (
                 lfo_rate_0to1 * (self.max_lfo_rate_hz - self.min_lfo_rate_hz)
                 + self.min_lfo_rate_hz
@@ -162,7 +161,7 @@ if __name__ == "__main__":
         wrapper,
         root_dir,
         submission=False,
-        dump_samples=True,
+        dump_samples=False,
         test_offline_mode=False,
         speed_benchmark=False,
     )

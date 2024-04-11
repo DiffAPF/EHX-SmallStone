@@ -167,7 +167,12 @@ class Phaser(torch.nn.Module):
         # bq filter
         b1 = torch.cat([self.bq.DC, self.bq.ff_params])
         a1 = utils.logits2coeff(self.bq.fb_params)
-        h1 = lfilter(x, a1.squeeze(), b1.squeeze(), clamp=False)
+        b1 = b1.view(1, 1, -1).expand(x.size(0), x.size(1), -1)
+        a1 = a1[1:]
+        a1 = a1.view(1, 1, -1).expand(x.size(0), x.size(1), -1)
+        # h1 = lfilter(x, a1.squeeze(), b1.squeeze(), clamp=False
+        h1 = self.lpc_func(x, a1)
+        h1 = utils.time_varying_fir(h1, b1)
 
         h1g = self.g1 * h1
 
