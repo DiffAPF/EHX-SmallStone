@@ -14,5 +14,5 @@ dependencies:
     - soundfile
     - torchaudio
     - torchlpc
-    - torchvision
+    - torchvision==0.16.2
     - wandb
