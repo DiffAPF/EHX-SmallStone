@@ -1,15 +1,27 @@
+from typing import Optional
+
 import torch
 from torch import Tensor as T
 from torch.nn import Parameter
 import torch.nn.functional as F
 
-def time_varying_fir(x: T, b: T) -> T:
+
+def combine_coeffs(x: T, y: T) -> T:
+    pad_size = x.size(-1) - 1
+    y = F.pad(y, (pad_size, pad_size)).unfold(-1, x.size(-1), 1)
+    return (y @ x.flip(-1).unsqueeze(-1)).squeeze(-1)
+
+
+def time_varying_fir(x: T, b: T, zi: Optional[T] = None) -> T:
     assert x.ndim == 2
     assert b.ndim == 3
     assert x.size(0) == b.size(0)
     assert x.size(1) == b.size(1)
     order = b.size(2) - 1
     x_padded = F.pad(x, (order, 0))
+    if zi is not None:
+        assert zi.shape == (x.size(0), order)
+        x_padded[:, :order] = zi
     x_unfolded = x_padded.unfold(dimension=1, size=order + 1, step=1)
     x_unfolded = x_unfolded.unsqueeze(3)
     b = b.flip(2).unsqueeze(2)
@@ -18,12 +30,38 @@ def time_varying_fir(x: T, b: T) -> T:
     y = y.squeeze(2)
     return y
 
+
+def sample_wise_lpc_scriptable(x: T, a: T, zi: Optional[T] = None) -> T:
+    assert x.ndim == 2
+    assert a.ndim == 3
+    assert x.size(0) == a.size(0)
+    assert x.size(1) == a.size(1)
+
+    B, T, order = a.shape
+    if zi is None:
+        zi = a.new_zeros(B, order)
+    else:
+        assert zi.shape == (B, order)
+
+    padded_y = torch.empty((B, T + order), dtype=x.dtype)
+    zi = torch.flip(zi, dims=[1])
+    padded_y[:, :order] = zi
+    padded_y[:, order:] = x
+    a_flip = torch.flip(a, dims=[2])
+
+    for t in range(T):
+        padded_y[:, t + order] -= (
+            a_flip[:, t : t + 1] @ padded_y[:, t : t + order, None]
+        )[:, 0, 0]
+
+    return padded_y[:, order:]
+
+
 def fourth_order_ap_coeffs(p):
-    b = torch.stack(
-        [p**4, -4*p**3, 6*p**2, -4*p, torch.ones_like(p)], dim=p.ndim
-    )
+    b = torch.stack([p**4, -4 * p**3, 6 * p**2, -4 * p, torch.ones_like(p)], dim=p.ndim)
     a = b.flip(-1)
     return a, b
+
 
 def logits2coeff(logits: T) -> T:
     assert logits.shape[-1] == 2
@@ -31,6 +69,7 @@ def logits2coeff(logits: T) -> T:
     a1_abs = torch.abs(a1)
     a2 = 0.5 * ((2 - a1_abs) * torch.tanh(logits[..., 1]) + a1_abs)
     return torch.stack([torch.ones_like(a1), a1, a2], dim=-1)
+
 
 def z_inverse(num_dft_bins, full=False):
     if full:
@@ -72,31 +111,40 @@ class Biquad(torch.nn.Module):
         )
         self.register_buffer("zpows", torch.pow(self.z, self.pows))
 
+
 class MLP(torch.nn.Module):
-    def __init__(self, in_features=1,
-                 out_features=1,
-                 width=8,
-                 n_hidden_layers=1,
-                 activation='tanh',
-                 bias=True):
+    def __init__(
+        self,
+        in_features=1,
+        out_features=1,
+        width=8,
+        n_hidden_layers=1,
+        activation="tanh",
+        bias=True,
+    ):
         super(MLP, self).__init__()
 
         self.model = torch.nn.Sequential()
 
         for n in range(n_hidden_layers):
-            self.model.append(torch.nn.Linear(in_features=in_features, out_features=width, bias=bias))
-            if activation == 'tanh':
+            self.model.append(
+                torch.nn.Linear(in_features=in_features, out_features=width, bias=bias)
+            )
+            if activation == "tanh":
                 self.model.append(torch.nn.Tanh())
             else:
                 self.model.append(torch.nn.ReLU())
             in_features = width
 
-        self.model.append(torch.nn.Linear(in_features=width, out_features=out_features, bias=bias))
+        self.model.append(
+            torch.nn.Linear(in_features=width, out_features=out_features, bias=bias)
+        )
 
     # requires input shape (L, 1) where L is sequence length
     def forward(self, x):
         y = self.model(x)
         return y.view(x.shape)
+
 
 class DampedOscillator(torch.nn.Module):
 
@@ -111,8 +159,7 @@ class DampedOscillator(torch.nn.Module):
         self.phi = Parameter(torch.randn(1))
         self.amp = Parameter(torch.Tensor([self.default_amplitude]))
 
-
-    def forward(self, n, damped, normalise=False):
+    def forward(self, n: int, damped: bool, normalise: bool = False):
 
         z = torch.polar(self.get_r(), self.omega)
         z0 = torch.polar(self.amp, self.phi)
@@ -123,14 +170,15 @@ class DampedOscillator(torch.nn.Module):
         if normalise:
             z0 = z0 / torch.abs(z0)
 
-        return torch.real(z0 * z ** n)
+        return torch.real(z0 * z**n)
 
     def get_r(self):
-        return torch.exp(-self.sigma ** 2)
+        return torch.exp(-self.sigma**2)
 
     def set_frequency(self, f0, sample_rate):
         omega = 2 * torch.pi * f0 / sample_rate
         self.omega = Parameter(omega)
+
 
 class ESRLoss(torch.nn.Module):
     def __init__(self):
@@ -143,4 +191,34 @@ class ESRLoss(torch.nn.Module):
         return torch.div(mse, signal_energy + self.epsilon)
 
 
+def linear_interpolate_dim(
+    x: T, n: int, dim: int = -1, align_corners: bool = True
+) -> T:
+    n_dim = x.ndim
+    assert 0 < n_dim <= 3
+    if dim < 0:
+        dim = n_dim + dim
+    assert 0 <= dim < n_dim
+    if x.size(dim) == n:
+        return x
 
+    swapped_dims = False
+    if n_dim == 1:
+        x = x.view(1, 1, -1)
+    elif n_dim == 2:
+        assert dim != 0  # TODO(cm)
+        x = x.unsqueeze(1)
+    elif x.ndim == 3:
+        assert dim != 0  # TODO(cm)
+        if dim == 1:
+            x = x.swapaxes(1, 2)
+            swapped_dims = True
+
+    x = F.interpolate(x, n, mode="linear", align_corners=align_corners)
+    if n_dim == 1:
+        x = x.view(-1)
+    elif n_dim == 2:
+        x = x.squeeze(1)
+    elif swapped_dims:
+        x = x.swapaxes(1, 2)
+    return x
