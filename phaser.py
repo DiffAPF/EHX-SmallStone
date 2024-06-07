@@ -106,7 +106,7 @@ class Phaser(torch.nn.Module):
         ###########
         time = torch.arange(0, num_hops).detach().view(num_hops, 1).to(device)
         lfo = self.lfo(time, damped=self.damped)
-        waveshaped_lfo = self.mlp(lfo).squeeze()
+        waveshaped_lfo = self.mlp(lfo).T
 
         ########################
         # Map to all-pass coeffs
@@ -135,9 +135,9 @@ class Phaser(torch.nn.Module):
             pad_mode="constant",
             window=self.hann,
         )
-        n_frames = X.size(2)
+        n_frames = X.size(-1)
 
-        p = utils.linear_interpolate_dim(p, n=n_frames, dim=1, align_corners=True)
+        p = utils.linear_interpolate_dim(p, n=n_frames, dim=-1, align_corners=True)
         p = p.unsqueeze(1)
         z = self.z.unsqueeze(0).expand(2, -1, -1)  # Match stereo batch size
         # Filter kernel
@@ -196,10 +196,10 @@ class Phaser(torch.nn.Module):
         if zi_a is not None:
             zi_a = torch.flip(zi_a, [-1])  # Convert to SciPy conventional ordering
 
-        y_a = self.lpc_func(x, full_denom[..., 1:], zi_a)
-        next_zi = y_a[..., -order:]
+        y_b = utils.time_varying_fir(x, full_b, zi)             # FIR
+        y_ab = self.lpc_func(y_b, full_denom[..., 1:], zi_a)    # all-pole
+        next_zi = y_ab[..., -order:]
 
-        y_ab = utils.time_varying_fir(y_a, full_b, zi)
         return y_ab, next_zi
 
     def get_params(self):
