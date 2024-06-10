@@ -52,3 +52,14 @@ This is because the beginning of the training data was truncated to speed up tra
 #out_sig, _ = model(in_sig)
 out_sig, _ = model(in_sig[..., int((60 - get_config(k)['train_data_length']) * sample_rate):])
 ```
+
+## Citation
+
+```bibtex
+@inproceedings{ycy2024diffapf,
+  title={Differentiable All-pole Filters for Time-varying Audio Systems},
+  author={Chin-Yun Yu and Christopher Mitcheltree and Alistair Carson and Stefan Bilbao and Joshua D. Reiss and György Fazekas},
+  booktitle={International Conference on Digital Audio Effects (DAFx)},
+  year={2024},
+}
+```
